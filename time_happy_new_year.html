@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Happy New Year</title>
+
+<style>
+* { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: radial-gradient(circle at bottom, #020617, #000);
+  overflow: hidden;
+}
+
+canvas { display: block; }
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: white;
+}
+
+.glass {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(16px);
+  border-radius: 20px;
+  padding: 40px 32px;
+  margin: 10px;
+  box-shadow: 0 25px 60px rgba(0,0,0,.6);
+  animation: fadeUp .8s ease;
+}
+
+.title {
+  font-size: 2.3rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  opacity: .8;
+  margin-bottom: 22px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+input {
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  text-align: center;
+  background: rgba(255,255,255,.15);
+  color: white;
+}
+
+button {
+  padding: 14px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg,#6366f1,#3b82f6);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.countdown {
+  font-size: clamp(3.5rem, 9vw, 6rem);
+  font-weight: 700;
+}
+
+.title-final {
+  font-size: clamp(2.5rem, 5vw, 3.5rem);
+  font-weight: 700;
+}
+
+.name {
+  font-size: 2rem;
+  opacity: .9;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(25px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas"></canvas>
+
+<audio id="countdownSound" src="assets/hitung mundur 10 detik.mp3"></audio>
+<audio id="fireworkSound" src="assets/efek kembang api.mp3" loop></audio>
+
+<!-- AUDIO GATE -->
+<div class="center" id="audioGate" style="background:rgba(0,0,0,.85); z-index:999;">
+  <div class="glass">
+    <div class="title">🔊 Aktifkan Suara</div>
+    <div class="subtitle">Klik sekali untuk melanjutkan</div>
+  </div>
+</div>
+
+<!-- INPUT -->
+<div class="center" id="inputBox">
+  <div class="glass">
+    <div class="title">New Year Countdown</div>
+    <div class="subtitle">Masukkan nama kamu</div>
+    <div class="input-group">
+      <input id="nameInput" placeholder="Nama kamu">
+      <button onclick="start()">Mulai 🎺</button>
+    </div>
+  </div>
+</div>
+
+<!-- COUNTDOWN -->
+<div class="center" id="timerBox" style="display:none;">
+  <div class="countdown" id="countdownText">00:00:00</div>
+</div>
+
+<!-- RESULT -->
+<div class="center" id="resultBox" style="display:none;">
+  <div class="glass">
+    <div class="title-final" id="titleText"></div>
+    <div class="name" id="userName"></div>
+  </div>
+</div>
+
+<script>
+// ================= TIME =================
+function getNextNewYear() {
+  const now = new Date();
+  const nextYear = now.getFullYear() + 1;
+  return new Date(nextYear, 0, 1, 0, 0, 0);
+}
+
+// ================= CANVAS =================
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+}
+resize();
+addEventListener("resize", resize);
+
+// ================= FIREWORK =================
+class Rocket {
+  constructor() {
+    this.x = Math.random() * canvas.width;
+    this.y = canvas.height + 10;
+    this.targetY = Math.random() * canvas.height * 0.4 + 100;
+    this.speed = Math.random() * 4 + 6;
+  }
+  update() {
+    this.y -= this.speed;
+    if (this.y <= this.targetY) {
+      explode(this.x, this.y);
+      return true;
+    }
+    return false;
+  }
+  draw() {
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class Particle {
+  constructor(x, y, a, s, c) {
+    this.x = x;
+    this.y = y;
+    this.vx = Math.cos(a) * s;
+    this.vy = Math.sin(a) * s;
+    this.alpha = 1;
+    this.color = c;
+  }
+  update() {
+    this.vy += 0.04;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.alpha -= 0.012;
+  }
+  draw() {
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+let rockets = [];
+let particles = [];
+let active = false;
+
+function explode(x, y) {
+  const colors = ["#facc15","#60a5fa","#fb7185","#a7f3d0"];
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.random() * 4 + 2;
+    particles.push(new Particle(x, y, a, s, colors[Math.floor(Math.random()*4)]));
+  }
+}
+
+function animate() {
+  ctx.fillStyle = "rgba(0,0,0,.25)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (active && Math.random() < 0.04) rockets.push(new Rocket());
+
+  rockets = rockets.filter(r => !r.update());
+  rockets.forEach(r => r.draw());
+
+  particles = particles.filter(p => {
+    p.update();
+    p.draw();
+    return p.alpha > 0;
+  });
+
+  requestAnimationFrame(animate);
+}
+animate();
+
+// ================= AUDIO =================
+const countdownSound = document.getElementById("countdownSound");
+const fireworkSound = document.getElementById("fireworkSound");
+const audioGate = document.getElementById("audioGate");
+
+let audioUnlocked = false;
+
+audioGate.onclick = () => {
+  [countdownSound, fireworkSound].forEach(a => {
+    a.muted = true;
+    a.play().then(() => {
+      a.pause();
+      a.currentTime = 0;
+      a.muted = false;
+      audioUnlocked = true;
+    });
+  });
+  audioGate.style.display = "none";
+};
+
+// ================= MAIN FLOW =================
+function start() {
+  const name = document.getElementById("nameInput").value.trim();
+  if (!name) return alert("Masukkan nama dulu");
+
+  localStorage.setItem("ny_name", name);
+  document.getElementById("inputBox").style.display = "none";
+  startCountdown();
+}
+
+function startCountdown() {
+  const target = getNextNewYear();
+  document.getElementById("timerBox").style.display = "flex";
+
+  const timer = setInterval(() => {
+    const diff = Math.floor((target - new Date()) / 1000);
+
+    if (diff <= 0) {
+      clearInterval(timer);
+      document.getElementById("timerBox").style.display = "none";
+      document.getElementById("resultBox").style.display = "flex";
+      document.getElementById("titleText").innerText =
+        `🎉 Happy New Year ${target.getFullYear()} 🎉`;
+
+      document.getElementById("userName").innerText =
+        localStorage.getItem("ny_name");
+
+      if (audioUnlocked) fireworkSound.play().catch(()=>{});
+      active = true;
+      return;
+    }
+
+    const h = String(Math.floor(diff / 3600)).padStart(2,"0");
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2,"0");
+    const s = String(diff % 60).padStart(2,"0");
+
+    document.getElementById("countdownText").textContent = `${h}:${m}:${s}`;
+
+    if (diff === 10 && audioUnlocked) {
+      countdownSound.currentTime = 0;
+      countdownSound.play().catch(()=>{});
+    }
+  }, 1000);
+}
+
+// Restore
+window.onload = () => {
+  document.getElementById("audioGate").style.display = "flex";
+  if (localStorage.getItem("ny_name")) {
+    document.getElementById("inputBox").style.display = "none";
+    startCountdown();
+  }
+};
+</script>
+
+</body>
+</html>
